@@ -1,7 +1,8 @@
 import sys
 
-# Aggiungi la cartella del progetto al path (modifica se necessario)
-project_home = '/home/frafalone/backend'
+# Aggiungi la cartella del progetto al path.
+# Sostituisci "YOURUSERNAME" con il tuo username PythonAnywhere.
+project_home = '/home/YOURUSERNAME/backend'
 if project_home not in sys.path:
     sys.path.insert(0, project_home)
 
