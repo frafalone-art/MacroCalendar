@@ -6,7 +6,7 @@ An Android app (Flutter) + Python backend that scrapes forex macroeconomic event
 ![Flask](https://img.shields.io/badge/Flask-Backend-000000?logo=flask&logoColor=white)
 ![BeautifulSoup4](https://img.shields.io/badge/Web%20Scraping-BeautifulSoup4-4CAF50?logoColor=white)
 [![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite)](https://sqlite.org/)
-![Markets](https://img.shields.io/badge/Markets-Forex-DAA520)
+[![Markets](https://img.shields.io/badge/Markets-Forex-DAA520)](https://www.ecb.europa.eu/press/calendars/weekly/html/index.en.html)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange)](LICENSE)
 
 ## Why I built this
