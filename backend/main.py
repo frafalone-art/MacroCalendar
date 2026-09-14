@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 # Chiave segreta per proteggere l'endpoint di trigger dello scraper.
 # Impostala come variabile d'ambiente (o cambiala qui).
-SCRAPER_SECRET = os.environ.get("SCRAPER_SECRET", "your-secre-key")
+SCRAPER_SECRET = os.environ.get("SCRAPER_SECRET", "your-secret-key")
 
 with app.app_context():
     init_db()
