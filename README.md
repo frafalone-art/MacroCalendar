@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="media/logo.png" alt="macro-calendar logo" width="120">
-</p>
-
-# 📊 macro-calendar
+# <img src="media/logo.png" width="42" align="center">  macro-calendar
 
 An Android app (Flutter) + Python backend that scrapes forex macroeconomic events (ECB, FOMC) and sends push notifications and calendar reminders.
 
