@@ -3,7 +3,7 @@
 An Android app (Flutter) + Python backend that scrapes forex macroeconomic events (ECB, FOMC) and sends push notifications and calendar reminders.
 
 [![Flutter](https://img.shields.io/badge/Flutter-UI-0553B1?logo=Flutter&logoColor=cyan)](https://flutter.dev)
-![Flask](https://img.shields.io/badge/Backend-Flask-000000?logo=flask&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-Backend-000000?logo=flask&logoColor=white)
 ![BeautifulSoup4](https://img.shields.io/badge/Web%20Scraping-BeautifulSoup4-4CAF50?logoColor=white)
 [![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite)](https://sqlite.org/)
 ![Markets](https://img.shields.io/badge/Markets-Forex-DAA520)
