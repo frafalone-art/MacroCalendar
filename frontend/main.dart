@@ -2,12 +2,33 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:device_calendar/device_calendar.dart';
 
 // TODO: sostituisci con il tuo dominio reale una volta online su PythonAnywhere
-const String baseUrl = "https://frafalone.pythonanywhere.com";
+const String baseUrl = "https://forexcalendar.pythonanywhere.com";
 const String appVersion = "1.0.0";
 
-void main() {
+// Quanto preavviso dare prima di un evento (minuti)
+const int notificationLeadMinutes = 15;
+
+final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
+final DeviceCalendarPlugin deviceCalendarPlugin = DeviceCalendarPlugin();
+
+Future<void> initNotifications() async {
+  tz_data.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Europe/Rome'));
+
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidSettings);
+  await notificationsPlugin.initialize(initSettings);
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initNotifications();
   runApp(const MacroCalendarApp());
 }
 
@@ -48,6 +69,20 @@ class MacroEvent {
       time: json['time'],
     );
   }
+
+  // Combina data + ora in un DateTime, se l'orario è disponibile
+  DateTime? get dateTime {
+    if (time == null) return null;
+    try {
+      final dateParts = date.split('-').map(int.parse).toList();
+      final timeParts = time!.split(':').map(int.parse).toList();
+      return DateTime(dateParts[0], dateParts[1], dateParts[2], timeParts[0], timeParts[1]);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool get isSpecial => name.toLowerCase().contains('press conference');
 }
 
 class HomeScreen extends StatefulWidget {
@@ -78,10 +113,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        final loadedEvents = data.map((e) => MacroEvent.fromJson(e)).toList();
         setState(() {
-          events = data.map((e) => MacroEvent.fromJson(e)).toList();
+          events = loadedEvents;
           loading = false;
         });
+
+        if (notificationsEnabled) {
+          await _scheduleNotifications(loadedEvents);
+        }
+        if (calendarEnabled) {
+          await _addSpecialEventsToCalendar(loadedEvents);
+        }
       } else {
         setState(() => loading = false);
       }
@@ -103,8 +146,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (value) {
       final status = await Permission.notification.request();
       setState(() => notificationsEnabled = status.isGranted);
+      if (status.isGranted) {
+        await _scheduleNotifications(events);
+      }
     } else {
       setState(() => notificationsEnabled = false);
+      await notificationsPlugin.cancelAll();
     }
   }
 
@@ -112,8 +159,72 @@ class _HomeScreenState extends State<HomeScreen> {
     if (value) {
       final status = await Permission.calendarFullAccess.request();
       setState(() => calendarEnabled = status.isGranted);
+      if (status.isGranted) {
+        await _addSpecialEventsToCalendar(events);
+      }
     } else {
       setState(() => calendarEnabled = false);
+    }
+  }
+
+  // Programma una notifica locale con preavviso per ogni evento con orario noto
+  Future<void> _scheduleNotifications(List<MacroEvent> events) async {
+    const androidDetails = AndroidNotificationDetails(
+      'macro_events',
+      'Eventi macroeconomici',
+      channelDescription: 'Notifiche per eventi macro imminenti',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: androidDetails);
+
+    for (final event in events) {
+      final eventDateTime = event.dateTime;
+      if (eventDateTime == null) continue;
+
+      final notifyAt = eventDateTime.subtract(const Duration(minutes: notificationLeadMinutes));
+      if (notifyAt.isBefore(DateTime.now())) continue;
+
+      final id = event.name.hashCode ^ event.date.hashCode;
+
+      await notificationsPlugin.zonedSchedule(
+        id,
+        event.name,
+        'Tra $notificationLeadMinutes minuti (${event.currencies.join(",")})',
+        tz.TZDateTime.from(notifyAt, tz.local),
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
+  }
+
+  // Aggiunge al calendario di sistema solo gli eventi "speciali" (press conference)
+  Future<void> _addSpecialEventsToCalendar(List<MacroEvent> events) async {
+    final permissionResult = await deviceCalendarPlugin.hasPermissions();
+    if (permissionResult.data != true) {
+      final requestResult = await deviceCalendarPlugin.requestPermissions();
+      if (requestResult.data != true) return;
+    }
+
+    final calendarsResult = await deviceCalendarPlugin.retrieveCalendars();
+    final writableCalendars = calendarsResult.data?.where((c) => c.isReadOnly == false).toList() ?? [];
+    if (writableCalendars.isEmpty) return;
+
+    final targetCalendar = writableCalendars.first;
+
+    for (final event in events.where((e) => e.isSpecial)) {
+      final startTime = event.dateTime;
+      if (startTime == null) continue;
+
+      final calendarEvent = Event(
+        targetCalendar.id,
+        title: event.name,
+        start: tz.TZDateTime.from(startTime, tz.local),
+        end: tz.TZDateTime.from(startTime.add(const Duration(hours: 1)), tz.local),
+      );
+
+      await deviceCalendarPlugin.createOrUpdateEvent(calendarEvent);
     }
   }
 
@@ -158,21 +269,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : events.isEmpty
-                  ? const Center(child: Text('Nessuna notizia imminente'))
-                  : ListView.builder(
-                itemCount: events.length,
-                itemBuilder: (context, index) {
-                  final e = events[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text(e.name),
-                      subtitle: Text(
-                        '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
-                      ),
-                    ),
-                  );
-                },
-              ),
+                      ? const Center(child: Text('Nessuna notizia imminente'))
+                      : ListView.builder(
+                          itemCount: events.length,
+                          itemBuilder: (context, index) {
+                            final e = events[index];
+                            return Card(
+                              child: ListTile(
+                                title: Text(e.name),
+                                subtitle: Text(
+                                  '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
+                                ),
+                                trailing: e.isSpecial ? const Icon(Icons.star, color: Colors.amber) : null,
+                              ),
+                            );
+                          },
+                        ),
             ),
             const SizedBox(height: 16),
             Row(
