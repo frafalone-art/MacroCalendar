@@ -1,8 +1,10 @@
 import re
-from datetime import datetime
+from datetime import datetime, time
 
 import requests
 from bs4 import BeautifulSoup
+
+from models import MacroEvent, SessionLocal, init_db
 
 ECB_URL = "https://www.ecb.europa.eu/press/calendars/weekly/html/index.en.html"
 
@@ -87,6 +89,50 @@ def filter_relevant(events: list[dict]) -> list[dict]:
     return [e for e in events if is_relevant(e["name"])]
 
 
+TIME_PATTERN = re.compile(r"(\d{1,2}):(\d{2})")
+
+
+def parse_time(time_raw: str | None) -> time | None:
+    if not time_raw:
+        return None
+    match = TIME_PATTERN.search(time_raw)
+    if not match:
+        return None
+    return time(int(match.group(1)), int(match.group(2)))
+
+
+def save_events_to_db(events: list[dict]) -> int:
+    init_db()
+    db = SessionLocal()
+    saved_count = 0
+    try:
+        for e in events:
+            exists = (
+                db.query(MacroEvent)
+                .filter(MacroEvent.name == e["name"], MacroEvent.date == e["date"])
+                .first()
+            )
+            if exists:
+                continue
+
+            db_event = MacroEvent(
+                name=e["name"],
+                importance="high",
+                currencies="EUR",
+                date=e["date"],
+                time=parse_time(e.get("time_raw")),
+                notified=False,
+            )
+            db.add(db_event)
+            saved_count += 1
+
+        db.commit()
+    finally:
+        db.close()
+
+    return saved_count
+
+
 if __name__ == "__main__":
     lines = fetch_page_text()
     print(f"[DEBUG] Righe scaricate dalla pagina: {len(lines)}")
@@ -105,3 +151,6 @@ if __name__ == "__main__":
     print(f"\n[DEBUG] Eventi dopo il filtro keyword: {len(filtered)}")
     for e in filtered:
         print(e)
+
+    saved = save_events_to_db(filtered)
+    print(f"\n[DEBUG] Nuovi eventi salvati nel DB: {saved}")
