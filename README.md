@@ -50,9 +50,7 @@ Deployed on [PythonAnywhere](https://www.pythonanywhere.com) (free tier) — see
 ## 📱 Frontend setup
 
 ```
-cd frontend
-flutter pub get
-flutter run
+Download the apk in the latest release on your phone and launch the app
 ```
 
 On first launch, the app will ask for your backend URL (saved locally on the device). You can change it anytime from the ⚙️ icon in the app bar.
