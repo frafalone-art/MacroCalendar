@@ -8,7 +8,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:device_calendar/device_calendar.dart';
 
 // TODO: sostituisci con il tuo dominio reale una volta online su PythonAnywhere
-const String baseUrl = "https://forexcalendar.pythonanywhere.com";
+const String baseUrl = "https://yourbackend.example";
 const String appVersion = "1.0.0";
 
 // Quanto preavviso dare prima di un evento (minuti)
@@ -269,22 +269,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : events.isEmpty
-                      ? const Center(child: Text('Nessuna notizia imminente'))
-                      : ListView.builder(
-                          itemCount: events.length,
-                          itemBuilder: (context, index) {
-                            final e = events[index];
-                            return Card(
-                              child: ListTile(
-                                title: Text(e.name),
-                                subtitle: Text(
-                                  '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
-                                ),
-                                trailing: e.isSpecial ? const Icon(Icons.star, color: Colors.amber) : null,
-                              ),
-                            );
-                          },
-                        ),
+                  ? const Center(child: Text('Nessuna notizia imminente'))
+                  : ListView.builder(
+                itemCount: events.length,
+                itemBuilder: (context, index) {
+                  final e = events[index];
+                  return Card(
+                    child: ListTile(
+                      title: Text(e.name),
+                      subtitle: Text(
+                        '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
+                      ),
+                      trailing: e.isSpecial ? const Icon(Icons.star, color: Colors.amber) : null,
+                    ),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 16),
             Row(
