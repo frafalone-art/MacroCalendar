@@ -55,12 +55,12 @@ flutter pub get
 flutter run
 ```
 
-Update `baseUrl` in `lib/main.dart` to point to your own backend deployment.
+On first launch, the app will ask for your backend URL (saved locally on the device). You can change it anytime from the ⚙️ icon in the app bar.
 
 ## 🧪 Tests
 
 ```
-cd tests
+cd backend
 pytest test_main.py -v
 ```
 
