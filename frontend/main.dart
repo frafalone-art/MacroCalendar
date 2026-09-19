@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:device_calendar/device_calendar.dart';
 
-// TODO: sostituisci con il tuo dominio reale una volta online su PythonAnywhere
-const String baseUrl = "https://yourbackend.example";
 const String appVersion = "1.0.0";
+const String backendUrlPrefKey = "backend_url";
 
 // Quanto preavviso dare prima di un evento (minuti)
 const int notificationLeadMinutes = 15;
@@ -70,7 +70,6 @@ class MacroEvent {
     );
   }
 
-  // Combina data + ora in un DateTime, se l'orario è disponibile
   DateTime? get dateTime {
     if (time == null) return null;
     try {
@@ -97,18 +96,86 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   bool notificationsEnabled = false;
   bool calendarEnabled = false;
+  String? backendUrl;
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
-    _checkPermissions();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(backendUrlPrefKey);
+
+    if (savedUrl == null || savedUrl.isEmpty) {
+      setState(() => loading = false);
+      // Chiede l'URL al primo avvio, dopo il primo frame
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showBackendUrlDialog(firstSetup: true));
+      return;
+    }
+
+    setState(() => backendUrl = savedUrl);
+    await _checkPermissions();
+    await _loadEvents();
+  }
+
+  Future<void> _saveBackendUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(backendUrlPrefKey, url);
+    setState(() => backendUrl = url);
+    await _loadEvents();
+  }
+
+  void _showBackendUrlDialog({bool firstSetup = false}) {
+    final controller = TextEditingController(text: backendUrl ?? '');
+    showDialog(
+      context: context,
+      barrierDismissible: !firstSetup,
+      builder: (_) => AlertDialog(
+        title: const Text('Backend URL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (firstSetup)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'This app needs your own backend deployment. See the project README for setup instructions.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'https://your-backend.example.com',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              final url = controller.text.trim();
+              if (url.isNotEmpty) {
+                Navigator.pop(context);
+                _saveBackendUrl(url.endsWith('/') ? url.substring(0, url.length - 1) : url);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadEvents() async {
+    if (backendUrl == null) return;
+    setState(() => loading = true);
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/events/upcoming'))
+          .get(Uri.parse('$backendUrl/events/upcoming'))
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
@@ -119,12 +186,8 @@ class _HomeScreenState extends State<HomeScreen> {
           loading = false;
         });
 
-        if (notificationsEnabled) {
-          await _scheduleNotifications(loadedEvents);
-        }
-        if (calendarEnabled) {
-          await _addSpecialEventsToCalendar(loadedEvents);
-        }
+        if (notificationsEnabled) await _scheduleNotifications(loadedEvents);
+        if (calendarEnabled) await _addSpecialEventsToCalendar(loadedEvents);
       } else {
         setState(() => loading = false);
       }
@@ -146,9 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (value) {
       final status = await Permission.notification.request();
       setState(() => notificationsEnabled = status.isGranted);
-      if (status.isGranted) {
-        await _scheduleNotifications(events);
-      }
+      if (status.isGranted) await _scheduleNotifications(events);
     } else {
       setState(() => notificationsEnabled = false);
       await notificationsPlugin.cancelAll();
@@ -159,15 +220,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (value) {
       final status = await Permission.calendarFullAccess.request();
       setState(() => calendarEnabled = status.isGranted);
-      if (status.isGranted) {
-        await _addSpecialEventsToCalendar(events);
-      }
+      if (status.isGranted) await _addSpecialEventsToCalendar(events);
     } else {
       setState(() => calendarEnabled = false);
     }
   }
 
-  // Programma una notifica locale con preavviso per ogni evento con orario noto
   Future<void> _scheduleNotifications(List<MacroEvent> events) async {
     const androidDetails = AndroidNotificationDetails(
       'macro_events',
@@ -199,7 +257,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Aggiunge al calendario di sistema solo gli eventi "speciali" (press conference)
   Future<void> _addSpecialEventsToCalendar(List<MacroEvent> events) async {
     final permissionResult = await deviceCalendarPlugin.hasPermissions();
     if (permissionResult.data != true) {
@@ -234,9 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => AlertDialog(
         title: const Text('Versione'),
         content: Text('Macro Calendar v$appVersion'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
       ),
     );
   }
@@ -247,9 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => AlertDialog(
         title: const Text('Crediti'),
         content: const Text('Sviluppato da Francesco Falone.\nDati: ECB, BLS, Eurostat.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
       ),
     );
   }
@@ -257,7 +310,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Macro Calendar')),
+      appBar: AppBar(
+        title: const Text('Macro Calendar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => _showBackendUrlDialog(),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -268,23 +329,25 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: loading
                   ? const Center(child: CircularProgressIndicator())
-                  : events.isEmpty
-                  ? const Center(child: Text('Nessuna notizia imminente'))
-                  : ListView.builder(
-                itemCount: events.length,
-                itemBuilder: (context, index) {
-                  final e = events[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text(e.name),
-                      subtitle: Text(
-                        '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
-                      ),
-                      trailing: e.isSpecial ? const Icon(Icons.star, color: Colors.amber) : null,
-                    ),
-                  );
-                },
-              ),
+                  : backendUrl == null
+                      ? const Center(child: Text('Configura il backend dalle impostazioni ⚙️'))
+                      : events.isEmpty
+                          ? const Center(child: Text('Nessuna notizia imminente'))
+                          : ListView.builder(
+                              itemCount: events.length,
+                              itemBuilder: (context, index) {
+                                final e = events[index];
+                                return Card(
+                                  child: ListTile(
+                                    title: Text(e.name),
+                                    subtitle: Text(
+                                      '${e.date}${e.time != null ? " - ${e.time}" : ""} · ${e.currencies.join(",")} · ${e.importance}',
+                                    ),
+                                    trailing: e.isSpecial ? const Icon(Icons.star, color: Colors.amber) : null,
+                                  ),
+                                );
+                              },
+                            ),
             ),
             const SizedBox(height: 16),
             Row(
