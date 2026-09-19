@@ -20,7 +20,7 @@ There was no free API for this kind of forex/macro calendar data (Forex Factory 
 | Part | What it does |
 |---|---|
 | 🐍 `backend/` | Flask API + scraper that pulls events from the ECB weekly calendar, filters by keyword, and stores them in SQLite |
-| 📱 `frontend/` | Flutter app showing upcoming events, with toggles for notifications and calendar access |
+| 📱 `frontend/` | Dart source code you can personalize |
 
 ## ⚙️ How it works
 
@@ -60,7 +60,7 @@ On first launch, the app will ask for your backend URL (saved locally on the dev
 ## 🧪 Tests
 
 ```
-cd backend
+cd tests
 pytest test_main.py -v
 ```
 
@@ -82,7 +82,7 @@ macro-calendar/
 │   ├── requirements.txt
 │   └── wsgi_pythonanywhere.py
 ├── frontend/
-│   └── (Flutter project)
+│   └── main.dart
 ├── media/
 │   └── logo.png
 ├── .gitignore
